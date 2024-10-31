@@ -24,21 +24,16 @@ For reference, the issue is discussed in the following resources:
 Special Thanks to Ben Heater for his blog on how to setup HTB profiles on pfsense and his initial work figuring out why it doesn't work on newer versions.
 
 ## Changes Made
-You can obviously diff this but here is the short version:
+Review the commit history to see what is behind the curtain, but here is the short version:
 
 There is a function called **cert_build_list**
 pfsense uses this to build the list of certs it uses.
 It runs a compatibility check via **cert_check_pkey_compatibility**
 This check compares the cert consumer and features against the array **$cert_curve_compatible**
 
-I've added a new function **cert_get_ed25519** to check the public key for ED25519 support
+I've added a new function **cert_check_pubkey_compatibility** to check the public key for ED25519 support
 Then implemented the new check into the existing logic.
 I have also updated the **$cert_curve_compatible** array and included ED25519 under the OpenVPN consumer.
-
-### Line Refs:
- - 2678 - Changes made to cert_build_list
- - 2692 - Start of new function **cert_get_ed25519**
- - 2575 - Updates to the **$cert_curve_compatible** array
 
 ## Installation  
 1. Download the patched version of `certs.inc` from this repository.

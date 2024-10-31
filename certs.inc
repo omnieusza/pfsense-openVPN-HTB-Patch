@@ -2504,7 +2504,7 @@ $cert_curve_compatible = array(
 	/* IPsec/EAP/TLS list per strongSwan docs/issues */
 	'IPsec' => array('prime256v1', 'secp384r1', 'secp521r1'),
 	/* OpenVPN bug limits usable curves, see https://redmine.pfsense.org/issues/9744 */
-	'OpenVPN' => array('prime256v1', 'secp384r1', 'secp521r1'),
+	'OpenVPN' => array('prime256v1', 'secp384r1', 'secp521r1','ED25519'),
 );
 $curve_compatible_list = array_unique(call_user_func_array('array_merge', array_values($cert_curve_compatible)));
 
@@ -2570,6 +2570,48 @@ function cert_check_pkey_compatibility($pkey, $consumer) {
 		in_array($curve, $cert_curve_compatible[$consumer]));
 }
 
+/***** certs/cert_check_pubkey_compatibility
+ * NAME
+ *   cert_check_pubkey_compatibility - Implemented by Tony Ekron aka Omnieus.
+ *                      This functions clones cert_check_pkey_compatibility but specifically looks for ED25519 certs
+ *                      This was done to support importing of HackTheBox OpenVPN profiles without breaking existing controls within pfsense 2.7.2
+* INPUTS
+ *   $pkey    : The public key to check
+ *   $consumer: The consumer name used to validate the curve. See the contents
+ *                 of $cert_curve_compatible for details.
+ * RESULT
+ *   true if the public key may be used in requested area, or if there are no
+ *        restrictions.
+ *   false if the public key cannot be used.
+ * NOTES
+ *   This is a hack job to support HackTheBox OpenVPN profiles.
+ *   the $cert_curve_compatible array needs to updated too
+ ******/
+
+ function cert_check_pubkey_compatibility($pubkey, $consumer) {
+    global $cert_curve_compatible;
+    $pubkey = base64_decode($pubkey);
+    $certResource = openssl_x509_read($pubkey);
+    $certDetails = openssl_x509_parse($certResource);
+    
+    if ($certDetails) {
+        $curve = $certDetails['signatureTypeSN'];
+		if ($curve !== 'ED25519') $curve = false;
+    } else {
+        $curve = false;
+    }
+    
+    return (
+        $curve === false ||
+        !array_key_exists($consumer, $cert_curve_compatible) ||
+        in_array($curve, $cert_curve_compatible[$consumer], true)
+    );
+
+
+}
+
+
+
 /****f* certs/cert_build_list
  * NAME
  *   cert_build_list - Build an option list of cert or CA entries, checked
@@ -2608,7 +2650,7 @@ function cert_build_list($type = 'cert', $consumer = '', $selectsource = false, 
 	foreach (config_get_path($type, []) as $cert) {
 		if (empty($cert['prv']) && ($type == 'cert')) {
 			continue;
-		} elseif (cert_check_pkey_compatibility($cert['prv'], $consumer) &&
+		} elseif ((cert_check_pkey_compatibility($cert['prv'], $consumer) || (cert_check_pubkey_compatibility($cert['crt'],$consumer))) &&
 			  cert_check_digest_compatibility($type, $cert, $consumer)) {
 			if ($selectsource) {
 				$list[] = array('refid' => $cert['refid'],
